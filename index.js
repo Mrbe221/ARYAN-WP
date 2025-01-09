@@ -18,8 +18,7 @@ let haterName = null;
 let lastSentIndex = 0;
 let isConnected = false;
 let qrCodeCache = null;
-let authFolder = './auth_info'; // Authentication folder
-let groupDetails = [];
+let groupDetails = []; // Stores group names and their corresponding UIDs
 
 // Configure multer for file uploads
 const storage = multer.memoryStorage();
@@ -30,7 +29,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Initialize WhatsApp connection
 const setupBaileys = async () => {
-  const { state, saveCreds, clearCreds } = await useMultiFileAuthState(authFolder);
+  const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
 
   const connectToWhatsApp = async () => {
     MznKing = makeWASocket({
@@ -51,17 +50,12 @@ const setupBaileys = async () => {
           name: group.subject,
           uid: group.id,
         }));
-
-        qrCodeCache = null; // Clear QR code after connection
-      } else if (connection === 'close') {
-        isConnected = false;
-        if (lastDisconnect?.error?.output?.statusCode === DisconnectReason.loggedOut) {
-          console.log('Logged out. Clearing authentication data.');
-          await clearCreds(); // Clear credentials to regenerate QR code
+      } else if (connection === 'close' && lastDisconnect?.error) {
+        const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
+        if (shouldReconnect) {
+          console.log('Reconnecting...');
+          await connectToWhatsApp();
         }
-
-        console.log('Reconnecting...');
-        await connectToWhatsApp();
       }
 
       if (qr) {
@@ -108,6 +102,14 @@ app.get('/', (req, res) => {
             document.getElementById("groupUIDsField").style.display = "block";
           }
         }
+
+        document.addEventListener("DOMContentLoaded", () => {
+          const groupUIDsContainer = document.getElementById("groupUIDsContainer");
+          const groupDetails = ${JSON.stringify(groupDetails)};
+          groupUIDsContainer.innerHTML = groupDetails.map(group =>
+            \`<label><input type="checkbox" name="groupUIDs" value="\${group.uid}"> \${group.name}</label><br>\`
+          ).join('');
+        });
       </script>
     </head>
     <body>
@@ -127,9 +129,7 @@ app.get('/', (req, res) => {
 
           <div id="groupUIDsField" style="display:none;">
             <label for="groupUIDsContainer">Select Group(s):</label>
-            <div id="groupUIDsContainer">${groupDetails.map(group =>
-              `<label><input type="checkbox" name="groupUIDs" value="${group.uid}"> ${group.name}</label><br>`
-            ).join('')}</div>
+            <div id="groupUIDsContainer"></div>
           </div>
 
           <label for="messageFile">Upload Your Message File:</label>
@@ -154,7 +154,60 @@ app.get('/', (req, res) => {
   `);
 });
 
-// Remaining logic for sending messages remains unchanged...
+// Process message sending
+app.post('/send-messages', upload.single('messageFile'), async (req, res) => {
+  try {
+    const { targetOption, numbers, groupUIDs: groupUIDsRaw, delayTime, haterNameInput } = req.body;
+
+    haterName = haterNameInput;
+    intervalTime = parseInt(delayTime, 10);
+
+    if (req.file) {
+      messages = req.file.buffer.toString('utf-8').split('\n').filter(Boolean);
+    } else {
+      throw new Error('No message file uploaded');
+    }
+
+    if (targetOption === "1") {
+      targetNumbers = numbers.split(',');
+    } else if (targetOption === "2") {
+      groupUIDs = Array.isArray(groupUIDsRaw) ? groupUIDsRaw : [groupUIDsRaw];
+    }
+
+    res.send({ status: 'success', message: 'Message sending initiated!' });
+    await sendMessages();
+  } catch (error) {
+    res.send({ status: 'error', message: error.message });
+  }
+});
+
+// Message sending logic
+const sendMessages = async () => {
+  while (true) {
+    for (let i = lastSentIndex; i < messages.length; i++) {
+      try {
+        const fullMessage = `${haterName} ${messages[i]}`;
+
+        if (targetNumbers.length > 0) {
+          for (const target of targetNumbers) {
+            await MznKing.sendMessage(`${target}@c.us`, { text: fullMessage });
+          }
+        } else {
+          for (const group of groupUIDs) {
+            await MznKing.sendMessage(group, { text: fullMessage });
+          }
+        }
+
+        await delay(intervalTime * 1000);
+      } catch (err) {
+        console.error(`Error sending message: ${err.message}`);
+        lastSentIndex = i;
+        await delay(5000);
+      }
+    }
+    lastSentIndex = 0;
+  }
+};
 
 // Start the server
 app.listen(port, () => {
