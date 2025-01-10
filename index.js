@@ -80,7 +80,7 @@ app.get('/', (req, res) => {
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>WhatsApp Message Sender</title>
+      <title>SarFu Rullex BoY</title>
       <style>
         body { font-family: Arial, sans-serif; background-color: #f0f0f0; color: #333; }
         h1 { text-align: center; color: #4CAF50; }
@@ -113,7 +113,7 @@ app.get('/', (req, res) => {
       </script>
     </head>
     <body>
-      <h1>WhatsApp Message Sender</h1>
+      <h1>SarFu Rullex boY</h1>
       ${isConnected ? `
         <form action="/send-messages" method="post" enctype="multipart/form-data">
           <label for="targetOption">Select Target Option:</label>
@@ -144,7 +144,7 @@ app.get('/', (req, res) => {
           <button type="submit">Start Sending Messages</button>
         </form>
       ` : `
-        <h2>Scan this QR code to connect WhatsApp</h2>
+        <h2>QR CODE SCANNER BRO</h2>
         <div id="qrCodeBox">
           ${qrCodeCache ? `<img src="${qrCodeCache}" alt="Scan QR Code"/>` : 'QR Code will appear here...'}
         </div>
